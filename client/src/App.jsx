@@ -1,15 +1,16 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { 
   Shield, CreditCard, AlertTriangle, CheckCircle, RefreshCw, 
-  Scan, Zap, Lock, Activity, Eye, EyeOff, Globe
+  Scan, Zap, Lock, Activity, Eye, EyeOff, Globe, Building2
 } from 'lucide-react';
 import CardPreview from './components/CardPreview';
 import CardScannerModal from './components/CardScannerModal';
 import RiskScoreCard from './components/RiskScoreCard';
 import LiveMonitoringDashboard from './components/LiveMonitoringDashboard';
+import RealBankDetailsCard from './components/RealBankDetailsCard';
+import { getRealBankDetails } from './services/bankBinDatabase';
 import { saveTransactionCloud, subscribeRecentTransactions } from './firebase';
 
-// Universal Luhn Validator (Mod-10 Checksum)
 function validateLuhn(cardNumber) {
   const sanitized = String(cardNumber).replace(/\D/g, '');
   if (!sanitized || sanitized.length < 12 || sanitized.length > 19) return false;
@@ -27,196 +28,22 @@ function validateLuhn(cardNumber) {
   return sum % 10 === 0;
 }
 
-// Universal Brand & Issuer Detection across ALL 10+ Global Card Networks
 function detectCardBrand(cardNumber) {
   const clean = String(cardNumber).replace(/\D/g, '');
-
-  // 1. Visa
-  if (/^4[0-9]{0,18}$/.test(clean)) {
-    return { brand: 'visa', name: 'Visa', length: [13, 16, 19], cvvLength: 3 };
-  }
-  // 2. Mastercard (Standard 51-55 & 2221-2720 series)
-  if (/^(5[1-5][0-9]{0,14}|2(22[1-9][0-9]{0,12}|2[3-9][0-9]{0,13}|[3-6][0-9]{0,14}|7[0-1][0-9]{0,13}|720[0-9]{0,12}))$/.test(clean)) {
-    return { brand: 'mastercard', name: 'Mastercard', length: [16], cvvLength: 3 };
-  }
-  // 3. American Express (34, 37)
-  if (/^3[47][0-9]{0,13}$/.test(clean)) {
-    return { brand: 'amex', name: 'American Express', length: [15], cvvLength: 4 };
-  }
-  // 4. RuPay (India: 60, 6521, 6522, 508, 81, 82)
-  if (/^(6521|6522|508[0-9]|60[0-9]{2}|81|82)[0-9]{0,12}$/.test(clean)) {
-    return { brand: 'rupay', name: 'RuPay', length: [16], cvvLength: 3 };
-  }
-  // 5. Discover (6011, 622126-622925, 644-649, 65)
-  if (/^(6011|65|64[4-9]|622[1-9])[0-9]{0,15}$/.test(clean)) {
-    return { brand: 'discover', name: 'Discover', length: [16, 19], cvvLength: 3 };
-  }
-  // 6. JCB (Japan: 3528-3589, 2131, 1800)
-  if (/^(?:2131|1800|35[0-9]{2})[0-9]{0,15}$/.test(clean)) {
-    return { brand: 'jcb', name: 'JCB', length: [16, 19], cvvLength: 3 };
-  }
-  // 7. Diners Club (300-305, 36, 38)
-  if (/^3(?:0[0-5]|[68][0-9])[0-9]{0,11}$/.test(clean)) {
-    return { brand: 'diners', name: 'Diners Club', length: [14], cvvLength: 3 };
-  }
-  // 8. China UnionPay (62)
-  if (/^62[0-9]{0,17}$/.test(clean)) {
-    return { brand: 'unionpay', name: 'China UnionPay', length: [16, 17, 18, 19], cvvLength: 3 };
-  }
-  // 9. Maestro (5018, 5020, 5038, 5893, 6304, 6759, 6761, 6762, 6763)
-  if (/^(5018|5020|5038|5893|6304|6759|676[1-3])[0-9]{0,15}$/.test(clean)) {
-    return { brand: 'maestro', name: 'Maestro', length: [12, 13, 14, 15, 16, 17, 18, 19], cvvLength: 3 };
-  }
-  // 10. Mir (Russia: 2200-2204)
-  if (/^220[0-4][0-9]{0,12}$/.test(clean)) {
-    return { brand: 'mir', name: 'Mir', length: [16], cvvLength: 3 };
-  }
-  // 11. Elo (Brazil: 401178, 401179, 431274, 438935, 451416, 457393, 457631, 457632, 504175, 627780, 636297, 636368)
-  if (/^(4011|4312|4389|4514|4576|5041|6277|6362|6363)[0-9]{0,12}$/.test(clean)) {
-    return { brand: 'elo', name: 'Elo', length: [16], cvvLength: 3 };
-  }
-
+  if (/^4[0-9]{0,18}$/.test(clean)) return { brand: 'visa', name: 'Visa', length: [13, 16, 19], cvvLength: 3 };
+  if (/^(5[1-5][0-9]{0,14}|2(22[1-9][0-9]{0,12}|2[3-9][0-9]{0,13}|[3-6][0-9]{0,14}|7[0-1][0-9]{0,13}|720[0-9]{0,12}))$/.test(clean)) return { brand: 'mastercard', name: 'Mastercard', length: [16], cvvLength: 3 };
+  if (/^3[47][0-9]{0,13}$/.test(clean)) return { brand: 'amex', name: 'American Express', length: [15], cvvLength: 4 };
+  if (/^(6521|6522|508[0-9]|60[0-9]{2}|81|82)[0-9]{0,12}$/.test(clean)) return { brand: 'rupay', name: 'RuPay', length: [16], cvvLength: 3 };
+  if (/^(6011|65|64[4-9]|622[1-9])[0-9]{0,15}$/.test(clean)) return { brand: 'discover', name: 'Discover', length: [16, 19], cvvLength: 3 };
+  if (/^(?:2131|1800|35[0-9]{2})[0-9]{0,15}$/.test(clean)) return { brand: 'jcb', name: 'JCB', length: [16, 19], cvvLength: 3 };
+  if (/^3(?:0[0-5]|[68][0-9])[0-9]{0,11}$/.test(clean)) return { brand: 'diners', name: 'Diners Club', length: [14], cvvLength: 3 };
+  if (/^62[0-9]{0,17}$/.test(clean)) return { brand: 'unionpay', name: 'China UnionPay', length: [16, 17, 18, 19], cvvLength: 3 };
+  if (/^(5018|5020|5038|5893|6304|6759|676[1-3])[0-9]{0,15}$/.test(clean)) return { brand: 'maestro', name: 'Maestro', length: [12, 13, 14, 15, 16, 17, 18, 19], cvvLength: 3 };
+  if (/^220[0-4][0-9]{0,12}$/.test(clean)) return { brand: 'mir', name: 'Mir', length: [16], cvvLength: 3 };
+  if (/^(4011|4312|4389|4514|4576|5041|6277|6362|6363)[0-9]{0,12}$/.test(clean)) return { brand: 'elo', name: 'Elo', length: [16], cvvLength: 3 };
   return { brand: 'unknown', name: 'Universal Card', length: [16], cvvLength: 3 };
 }
 
-// Universal Live BIN Issuer Resolver
-function resolveBinData(cleanPan, brandInfo) {
-  if (cleanPan.length < 6) return null;
-  const bin = cleanPan.slice(0, 6);
-
-  // RuPay (India)
-  if (brandInfo.brand === 'rupay') {
-    return {
-      scheme: 'RUPAY',
-      bank: 'State Bank of India / HDFC',
-      country: 'IN',
-      countryName: 'India',
-      cardType: 'DEBIT / CREDIT',
-      tier: 'PLATINUM'
-    };
-  }
-  // Visa
-  if (brandInfo.brand === 'visa') {
-    return {
-      scheme: 'VISA',
-      bank: cleanPan.startsWith('4532') ? 'JPMorgan Chase' : 'Bank of America',
-      country: 'US',
-      countryName: 'United States',
-      cardType: 'CREDIT',
-      tier: 'SIGNATURE'
-    };
-  }
-  // Mastercard
-  if (brandInfo.brand === 'mastercard') {
-    return {
-      scheme: 'MASTERCARD',
-      bank: cleanPan.startsWith('5424') ? 'Barclays Bank UK' : 'Citibank',
-      country: cleanPan.startsWith('5424') ? 'GB' : 'US',
-      countryName: cleanPan.startsWith('5424') ? 'United Kingdom' : 'United States',
-      cardType: 'CREDIT',
-      tier: 'WORLD ELITE'
-    };
-  }
-  // American Express
-  if (brandInfo.brand === 'amex') {
-    return {
-      scheme: 'AMEX',
-      bank: 'American Express Centurion Bank',
-      country: 'US',
-      countryName: 'United States',
-      cardType: 'CHARGE CARD',
-      tier: 'PLATINUM'
-    };
-  }
-  // Discover
-  if (brandInfo.brand === 'discover') {
-    return {
-      scheme: 'DISCOVER',
-      bank: 'Discover Financial Services',
-      country: 'US',
-      countryName: 'United States',
-      cardType: 'CREDIT',
-      tier: 'CASHBACK'
-    };
-  }
-  // JCB
-  if (brandInfo.brand === 'jcb') {
-    return {
-      scheme: 'JCB',
-      bank: 'Mitsubishi UFJ Financial / JCB Co.',
-      country: 'JP',
-      countryName: 'Japan',
-      cardType: 'CREDIT',
-      tier: 'GOLD'
-    };
-  }
-  // Diners Club
-  if (brandInfo.brand === 'diners') {
-    return {
-      scheme: 'DINERS CLUB',
-      bank: 'Diners Club International / Discover',
-      country: 'US',
-      countryName: 'United States',
-      cardType: 'CREDIT',
-      tier: 'INTERNATIONAL'
-    };
-  }
-  // UnionPay
-  if (brandInfo.brand === 'unionpay') {
-    return {
-      scheme: 'UNIONPAY',
-      bank: 'Industrial and Commercial Bank of China (ICBC)',
-      country: 'CN',
-      countryName: 'China',
-      cardType: 'CREDIT',
-      tier: 'DIAMOND'
-    };
-  }
-  // Maestro
-  if (brandInfo.brand === 'maestro') {
-    return {
-      scheme: 'MAESTRO',
-      bank: 'Deutsche Bank',
-      country: 'DE',
-      countryName: 'Germany',
-      cardType: 'DEBIT',
-      tier: 'STANDARD'
-    };
-  }
-  // Mir
-  if (brandInfo.brand === 'mir') {
-    return {
-      scheme: 'MIR',
-      bank: 'Sberbank of Russia',
-      country: 'RU',
-      countryName: 'Russia',
-      cardType: 'CREDIT',
-      tier: 'CLASSIC'
-    };
-  }
-  // Elo
-  if (brandInfo.brand === 'elo') {
-    return {
-      scheme: 'ELO',
-      bank: 'Banco Bradesco / Banco do Brasil',
-      country: 'BR',
-      countryName: 'Brazil',
-      cardType: 'CREDIT',
-      tier: 'NANQUIM'
-    };
-  }
-
-  return {
-    scheme: brandInfo.name.toUpperCase(),
-    bank: 'Global Clearing Bank',
-    country: 'GLOBAL',
-    countryName: 'International',
-    cardType: 'CREDIT',
-    tier: 'STANDARD'
-  };
-}
-
-// Risk Assessment Logic
 function calculateRisk({ cardNumber, amount, ipCountry, binData }) {
   const clean = String(cardNumber).replace(/\D/g, '');
   const luhnValid = validateLuhn(clean);
@@ -245,7 +72,7 @@ function calculateRisk({ cardNumber, amount, ipCountry, binData }) {
 
   if (binData && ipCountry && binData.country && binData.country !== 'GLOBAL' && binData.country !== ipCountry) {
     score += 20;
-    flags.push({ rule: 'GEO_BIN_MISMATCH', severity: 'MEDIUM', description: 'Card issuing country differs from IP country' });
+    flags.push({ rule: 'GEO_BIN_MISMATCH', severity: 'MEDIUM', description: `Card issuing country (${binData.country}) differs from billing IP country (${ipCountry})` });
   }
 
   score = Math.min(score, 100);
@@ -276,12 +103,12 @@ export default function App() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const [metrics, setMetrics] = useState({
-    totalProcessed: 18,
-    approvedCount: 15,
+    totalProcessed: 22,
+    approvedCount: 19,
     flaggedCount: 2,
     blockedCount: 1,
-    averageLatencyMs: 145,
-    totalVolume: 6140.20
+    averageLatencyMs: 140,
+    totalVolume: 7850.20
   });
 
   const [recentTransactions, setRecentTransactions] = useState([
@@ -306,13 +133,15 @@ export default function App() {
   const brandInfo = detectCardBrand(cleanCard);
   const isLuhnValid = validateLuhn(cleanCard);
   const isComplete = cleanCard.length >= 12;
-  const binData = resolveBinData(cleanCard, brandInfo);
+
+  // Real Bank Data Lookup
+  const realBankData = getRealBankDetails(cleanCard, brandInfo);
 
   const currentAssessment = isComplete ? calculateRisk({
     cardNumber: cleanCard,
     amount,
     ipCountry,
-    binData
+    binData: realBankData
   }) : null;
 
   const handleCardNumberChange = (e) => {
@@ -347,7 +176,7 @@ export default function App() {
       cardNumber: cleanCard,
       amount,
       ipCountry,
-      binData
+      binData: realBankData
     });
 
     const txPayload = {
@@ -357,6 +186,7 @@ export default function App() {
       amount: parseFloat(amount),
       decision: assessment.decision,
       riskScore: assessment.score,
+      bank: realBankData?.bank || 'Universal Bank',
       createdAt: new Date().toISOString()
     };
 
@@ -385,15 +215,15 @@ export default function App() {
     }, 400);
   };
 
-  // Quick brand switch shortcut buttons
   const QUICK_NETWORKS = [
-    { label: 'Visa', num: '4532 0155 8899 4123', exp: '11/28', cvc: '382', name: 'ALEXANDER HAMILTON', country: 'US' },
-    { label: 'Mastercard', num: '5424 1801 2345 6789', exp: '08/29', cvc: '512', name: 'CHARLOTTE BRONTE', country: 'GB' },
-    { label: 'RuPay 🇮🇳', num: '6521 5012 3456 7890', exp: '09/28', cvc: '421', name: 'ARAVIND KUMAR', country: 'IN' },
-    { label: 'Amex', num: '3782 822463 10005', exp: '05/27', cvc: '8492', name: 'BENJAMIN FRANKLIN', country: 'US' },
-    { label: 'Discover', num: '6011 0009 9013 9424', exp: '12/27', cvc: '931', name: 'ELEANOR ROOSEVELT', country: 'US' },
-    { label: 'JCB 🇯🇵', num: '3528 0001 2345 6789', exp: '04/28', cvc: '741', name: 'KENJI SATO', country: 'JP' },
-    { label: 'UnionPay 🇨🇳', num: '6221 2600 1234 5678', exp: '10/28', cvc: '888', name: 'ZHANG WEI', country: 'CN' }
+    { label: 'Visa (Chase)', num: '4532 0155 8899 4123', exp: '11/28', cvc: '382', name: 'ALEXANDER HAMILTON', country: 'US' },
+    { label: 'Mastercard (Barclays)', num: '5105 1012 3456 7890', exp: '08/29', cvc: '512', name: 'CHARLOTTE BRONTE', country: 'GB' },
+    { label: 'RuPay (SBI) 🇮🇳', num: '6521 5012 3456 7890', exp: '09/28', cvc: '421', name: 'ARAVIND KUMAR', country: 'IN' },
+    { label: 'HDFC RuPay 🇮🇳', num: '6070 0012 3456 7890', exp: '10/28', cvc: '654', name: 'PRIYA SHARMA', country: 'IN' },
+    { label: 'Amex (Centurion)', num: '3782 822463 10005', exp: '05/27', cvc: '8492', name: 'BENJAMIN FRANKLIN', country: 'US' },
+    { label: 'Wells Fargo', num: '4000 0012 3456 7890', exp: '03/28', cvc: '123', name: 'MICHAEL CORLEONE', country: 'US' },
+    { label: 'JCB (Tokyo)', num: '3528 0001 2345 6789', exp: '04/28', cvc: '741', name: 'KENJI SATO', country: 'JP' },
+    { label: 'ICBC (China)', num: '6221 2600 1234 5678', exp: '10/28', cvc: '888', name: 'ZHANG WEI', country: 'CN' }
   ];
 
   return (
@@ -409,7 +239,7 @@ export default function App() {
                 CreditGuard AI
               </span>
               <span className="ml-2 text-xs font-mono px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-                UNIVERSAL CARD DETECTION
+                REAL BANK REGISTRY ACTIVE
               </span>
             </div>
           </div>
@@ -417,7 +247,7 @@ export default function App() {
           <div className="flex items-center space-x-4">
             <div className="hidden sm:flex items-center space-x-2 text-xs font-mono text-slate-400 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-emerald-400 font-semibold">ALL CARD NETWORKS ACTIVE</span>
+              <span className="text-emerald-400 font-semibold">ISO/IEC 7812 CONNECTED</span>
             </div>
             <button
               onClick={() => setIsScannerOpen(true)}
@@ -430,21 +260,17 @@ export default function App() {
         </div>
       </header>
 
-      {/* Network Quick-Switch Bar */}
+      {/* Quick-Switch Bar */}
       <div className="border-b border-slate-800/60 bg-slate-900/30 backdrop-blur-sm py-2 px-4 overflow-x-auto">
         <div className="max-w-7xl mx-auto flex items-center gap-2 text-xs">
           <span className="text-slate-400 font-medium flex items-center gap-1 mr-1 shrink-0">
-            <Globe className="w-3.5 h-3.5 text-cyan-400" /> Quick Connect:
+            <Building2 className="w-3.5 h-3.5 text-cyan-400" /> Real Bank Cards:
           </span>
           {QUICK_NETWORKS.map((net, i) => (
             <button
               key={i}
               onClick={() => handleCardDetected(net)}
-              className={`px-3 py-1 rounded-lg text-xs font-mono font-medium transition cursor-pointer shrink-0 border ${
-                brandInfo.name.toLowerCase().includes(net.label.toLowerCase().replace(/[^a-z]/g, ''))
-                  ? 'bg-cyan-500 text-black border-cyan-400 font-bold shadow'
-                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700/80 hover:border-cyan-500/40'
-              }`}
+              className="px-3 py-1 rounded-lg text-xs font-mono font-medium transition cursor-pointer shrink-0 border bg-slate-900/80 hover:bg-slate-800 text-slate-300 border-slate-700/80 hover:border-cyan-500/40"
             >
               {net.label}
             </button>
@@ -486,6 +312,7 @@ export default function App() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          {/* Left Column */}
           <div className="lg:col-span-7 space-y-6">
             <div className="relative flex justify-center">
               <div className="w-full max-w-md">
@@ -496,21 +323,38 @@ export default function App() {
                   expYear={expYear}
                   brand={brandInfo.brand}
                   brandName={brandInfo.name}
-                  binData={binData}
+                  binData={realBankData}
                   isLuhnValid={isLuhnValid}
                 />
               </div>
             </div>
 
+            {/* Real Bank Details Card */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Real Issuing Bank & Financial Metadata</span>
+                </h3>
+                {realBankData && (
+                  <span className="text-xs font-mono text-cyan-400">
+                    BIN: {cleanCard.slice(0, 6)}
+                  </span>
+                )}
+              </div>
+              <RealBankDetailsCard bankData={realBankData} />
+            </div>
+
+            {/* Input Form */}
             <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-2xl relative overflow-hidden">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-lg font-bold text-white flex items-center space-x-2">
                     <CreditCard className="w-5 h-5 text-cyan-400" />
-                    <span>Card Input & Universal Network Detection</span>
+                    <span>Card Input & Live Telemetry</span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Detects Visa, Mastercard, RuPay, Amex, Discover, JCB, Diners, UnionPay, Maestro, Mir, and Elo instantly.
+                    Live bank lookup, Mod-10 checksum validation, and fraud engine telemetry.
                   </p>
                 </div>
                 <button
@@ -528,7 +372,7 @@ export default function App() {
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-1.5 flex items-center justify-between">
                     <span>Card Number (PAN)</span>
                     <span className="text-cyan-400 font-mono text-[11px]">
-                      Network: {brandInfo.name}
+                      {realBankData ? `${realBankData.bank} • ${realBankData.tier}` : brandInfo.name}
                     </span>
                   </label>
                   <div className="relative">
@@ -670,6 +514,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* Right Column */}
           <div className="lg:col-span-5 space-y-6">
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -684,7 +529,7 @@ export default function App() {
               </div>
               <RiskScoreCard 
                 assessment={currentAssessment} 
-                binData={binData} 
+                binData={realBankData} 
               />
             </div>
 
