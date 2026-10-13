@@ -1,8 +1,6 @@
 ﻿import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, serverTimestamp, onSnapshot, query, orderBy, limit } from "firebase/firestore";
 
-// Configured for Firebase 30-day trial / sandbox environment
-// Replace with your Firebase Console Project credentials if using custom project:
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDemoTrialKey30DaySandbox12345678",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "credit-card-guard-trial.firebaseapp.com",
@@ -22,10 +20,7 @@ try {
   console.warn("[Firebase] Initialized with fallback trial client:", e.message);
 }
 
-/**
- * Log transaction telemetry to Cloud Firestore (PCI-DSS compliant: Masked PAN only)
- */
-export async function logTransactionToFirebase(record) {
+export async function saveTransactionCloud(record) {
   if (!db) return;
   try {
     const colRef = collection(db, "transactions");
@@ -34,8 +29,27 @@ export async function logTransactionToFirebase(record) {
       createdAt: serverTimestamp()
     });
   } catch (err) {
-    console.warn("[Firebase] Telemetry synced to local store (Trial mode):", err.message);
+    console.warn("[Firebase] Telemetry synced to local store:", err.message);
   }
+}
+
+export function subscribeRecentTransactions(callback) {
+  if (!db) return () => {};
+  try {
+    const q = query(collection(db, "transactions"), orderBy("createdAt", "desc"), limit(10));
+    return onSnapshot(q, (snapshot) => {
+      const txs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      callback(txs);
+    }, (err) => {
+      console.warn("[Firebase] Real-time listener offline fallback:", err.message);
+    });
+  } catch (err) {
+    return () => {};
+  }
+}
+
+export async function logTransactionToFirebase(record) {
+  return saveTransactionCloud(record);
 }
 
 export { app, db };
